@@ -1,0 +1,41 @@
+
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#173D32"/>
+      <stop offset="100%" stop-color="#0E2820"/>
+    </linearGradient>
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#D9F99D"/>
+      <stop offset="100%" stop-color="#A3E635"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#000" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+
+  <!-- Background rounded canvas -->
+  <rect width="512" height="512" rx="128" fill="url(#bgGrad)"/>
+
+  <!-- Subtle ambient inner glow ring -->
+  <circle cx="256" cy="256" r="210" fill="none" stroke="#D9F99D" stroke-width="2" stroke-opacity="0.15"/>
+
+  <!-- Modern Geometric Montra Emblem: Flowing 'M' & Wealth Orbit -->
+  <g filter="url(#shadow)" transform="translate(256, 256) scale(1.1) translate(-256, -256)">
+    <!-- Base Wallet / Arc Foundation -->
+    <path d="M128 320 C128 360, 160 384, 256 384 C352 384, 384 360, 384 320" 
+          fill="none" stroke="#255E4E" stroke-width="20" stroke-linecap="round"/>
+    
+    <!-- Stylized Modern M / Dynamic Growth Peaks -->
+    <path d="M140 330 L180 180 L256 280 L332 180 L372 330" 
+          fill="none" stroke="#ffffff" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/>
+    
+    <!-- Vibrant Lime Wealth Node / Coin Crest -->
+    <circle cx="256" cy="150" r="32" fill="url(#accentGrad)" />
+    <path d="M256 132 L256 168 M244 142 C244 136, 268 136, 268 146 C268 156, 244 154, 244 162 C244 168, 268 168, 268 164" 
+          fill="none" stroke="#173D32" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+          
+    <!-- Upward Growth Accent Trail -->
+    <circle cx="348" cy="140" r="10" fill="#D9F99D" opacity="0.85"/>
+  </g>
+</svg>

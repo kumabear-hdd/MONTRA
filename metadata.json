@@ -1,0 +1,6 @@
+{
+  "name": "Montra — Personal Finance Tracker & Budget Planner",
+  "description": "Take Control of Your Money. Track daily income and expenses, monitor balance, manage budgets, analyze spending, and achieve savings goals.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
