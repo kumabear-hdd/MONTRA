@@ -79,123 +79,65 @@ export const DEFAULT_SETTINGS: AppSettings = {
   hasInitializedSeed: true,
 };
 
-export const INITIAL_SPACES: FinancialSpace[] = [
-  {
-    id: 'space_personal',
-    name: 'Keuangan Pribadi (Personal)',
-    description: 'Ruang privat untuk mencatat pemasukan, belanja harian, dan tabungan pribadi Anda.',
-    icon: 'Wallet',
-    color: '#173D32', // Montra Forest Green
-    type: 'personal',
-    openingBalance: 0, // Clean 0 starting balance
-    ownerId: DEFAULT_CURRENT_USER.id,
-    ownerName: DEFAULT_CURRENT_USER.name,
+export function createDefaultSpaceForUser(
+  user: CurrentUser,
+  options?: Partial<FinancialSpace>
+): FinancialSpace {
+  const spaceId = `space_${user.id}_${Date.now()}`;
+  return {
+    id: spaceId,
+    name: options?.name || 'Keuangan Pribadi',
+    description: options?.description || 'Ruang utama untuk mencatat pengeluaran dan pemasukan pribadi.',
+    icon: options?.icon || 'Wallet',
+    color: options?.color || '#173D32',
+    type: options?.type || 'personal',
+    openingBalance: options?.openingBalance || 0,
+    ownerId: user.id,
+    ownerName: user.name,
     members: [
       {
-        id: `m_${Date.now()}_1`,
-        spaceId: 'space_personal',
-        userId: DEFAULT_CURRENT_USER.id,
-        name: DEFAULT_CURRENT_USER.name,
-        email: DEFAULT_CURRENT_USER.email,
+        id: `m_${user.id}_${Date.now()}`,
+        spaceId,
+        userId: user.id,
+        name: user.name,
+        email: user.email,
         role: 'owner',
         joinedAt: Date.now(),
       },
     ],
     isArchived: false,
-    createdAt: Date.now() - 30 * 86400000,
+    createdAt: Date.now(),
     updatedAt: Date.now(),
-  },
-  {
-    id: 'space_household',
-    name: 'Rumah Tangga Bersama (Shared Household)',
-    description: 'Ruang kolaborasi 4 anggota keluarga: iuran bulanan, tagihan PLN & air, belanja dapur, dan wifi.',
-    icon: 'Home',
-    color: '#0284C7', // Blue
-    type: 'shared',
-    openingBalance: 0,
-    ownerId: DEFAULT_CURRENT_USER.id,
-    ownerName: DEFAULT_CURRENT_USER.name,
-    members: [
-      {
-        id: 'm_hh_1',
-        spaceId: 'space_household',
-        userId: 'usr_daffa',
-        name: 'Daffa (Anda)',
-        email: 'daffa@smkarier.co.id',
-        role: 'owner',
-        joinedAt: Date.now() - 25 * 86400000,
-      },
-      {
-        id: 'm_hh_2',
-        spaceId: 'space_household',
-        userId: 'usr_siti',
-        name: 'Siti Rahma',
-        email: 'siti@keluarga.id',
-        role: 'admin',
-        joinedAt: Date.now() - 25 * 86400000,
-      },
-      {
-        id: 'm_hh_3',
-        spaceId: 'space_household',
-        userId: 'usr_budi',
-        name: 'Budi Santoso',
-        email: 'budi@keluarga.id',
-        role: 'member',
-        joinedAt: Date.now() - 20 * 86400000,
-      },
-      {
-        id: 'm_hh_4',
-        spaceId: 'space_household',
-        userId: 'usr_dewi',
-        name: 'Dewi Lestari',
-        email: 'dewi@keluarga.id',
-        role: 'viewer',
-        joinedAt: Date.now() - 15 * 86400000,
-      },
-    ],
-    isArchived: false,
-    createdAt: Date.now() - 25 * 86400000,
-    updatedAt: Date.now(),
-  },
-];
+  };
+}
+
+export const INITIAL_SPACES: FinancialSpace[] = [];
 
 /**
  * Initialize Database for Multi-Space Architecture:
- * Sets up initial spaces, active space preference, and migrates legacy records.
+ * Ensures settings exist and handles schema migrations.
  */
-export async function initializeMultiSpaceData(): Promise<void> {
-  const spacesCount = await db.spaces.count();
-
-  if (spacesCount === 0) {
-    await db.spaces.bulkPut(INITIAL_SPACES);
-  }
-
-  // Ensure settings exist with activeSpaceId
+export async function initializeMultiSpaceData(user?: CurrentUser): Promise<void> {
+  // Ensure default settings exist
   const settingsCount = await db.settings.count();
   if (settingsCount === 0) {
     for (const [key, value] of Object.entries(DEFAULT_SETTINGS)) {
       await db.settings.put({ key, value });
     }
-  } else {
-    const activeSpaceSetting = await db.settings.get('activeSpaceId');
-    if (!activeSpaceSetting) {
-      await db.settings.put({ key: 'activeSpaceId', value: 'space_personal' });
+  }
+
+  // If user is provided, check if user has spaces; if zero and legacy data exists, scope it
+  if (user) {
+    const userSpaces = await db.spaces
+      .filter((s) => s.ownerId === user.id || s.members.some((m) => m.userId === user.id))
+      .toArray();
+
+    if (userSpaces.length > 0) {
+      const activeSetting = await db.settings.get(`activeSpaceId_${user.id}`);
+      if (!activeSetting) {
+        await db.settings.put({ key: `activeSpaceId_${user.id}`, value: userSpaces[0].id });
+      }
     }
   }
-
-  // Migrate any legacy unassigned transactions or records
-  const unassignedTx = await db.transactions.filter((t) => !t.spaceId).toArray();
-  for (const tx of unassignedTx) {
-    await db.transactions.update(tx.id, { spaceId: 'space_personal' });
-  }
-
-  const unassignedBudgets = await db.budgets.filter((b) => !b.spaceId).toArray();
-  for (const b of unassignedBudgets) {
-    await db.budgets.update(b.id, { spaceId: 'space_personal' });
-  }
-
-  const unassignedGoals = await db.savingsGoals.filter((g) => !g.spaceId).toArray();
-  for (const g of unassignedGoals) {
-    await db.savingsGoals.update(g.id, { spaceId: 'space_personal' });
-  }
 }
+

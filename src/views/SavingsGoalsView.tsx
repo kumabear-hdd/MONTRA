@@ -185,8 +185,28 @@ export const SavingsGoalsView: React.FC<SavingsGoalsViewProps> = ({
       </div>
 
       {/* Goals Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        {savingsGoals.map((goal) => {
+      {savingsGoals.length === 0 ? (
+        <div className="p-12 text-center bg-white rounded-3xl border border-stone-200/80 shadow-2xs">
+          <div className="w-12 h-12 rounded-2xl bg-lime-50 text-[#173D32] flex items-center justify-center mx-auto mb-3">
+            <PiggyBank className="w-6 h-6" />
+          </div>
+          <h4 className="text-base font-bold text-stone-800">Belum ada target tabungan</h4>
+          <p className="text-xs text-stone-500 mt-1 max-w-sm mx-auto">
+            Belum ada target tabungan. Tentukan tujuan finansialmu.
+          </p>
+          <div className="flex items-center justify-center gap-2 mt-4">
+            <button
+              onClick={() => setIsAddModalOpen(true)}
+              className="px-5 py-2.5 rounded-xl bg-[#173D32] text-white text-xs font-semibold hover:bg-[#123027] transition shadow-xs flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4 text-[#D9F99D]" />
+              <span>Buat Target Tabungan Pertama</span>
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          {savingsGoals.map((goal) => {
           const progress =
             goal.targetAmount > 0
               ? Math.min(100, Math.round((goal.currentAmount / goal.targetAmount) * 100))
@@ -286,7 +306,8 @@ export const SavingsGoalsView: React.FC<SavingsGoalsViewProps> = ({
             </div>
           );
         })}
-      </div>
+        </div>
+      )}
 
       {/* History of Savings Transfers */}
       <div className="p-5 sm:p-6 rounded-3xl bg-white border border-stone-200/80 shadow-2xs">

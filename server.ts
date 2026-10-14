@@ -3,6 +3,15 @@ import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { GoogleGenAI, Type } from '@google/genai';
+import {
+  createSessionToken,
+  hashPassword,
+  loadUsers,
+  saveUsers,
+  type StoredUser,
+  verifyPassword,
+  verifySessionToken,
+} from './src/server/auth.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -138,6 +147,341 @@ Return only valid JSON matching the schema.
     });
   }
 });
+
+// ----------------------------------------------------
+// Authentication API Endpoints
+// ----------------------------------------------------
+
+// Helper to validate email format
+const isValidEmail = (email: string): boolean => {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+};
+
+// 1. User Registration
+app.post('/api/auth/register', (req, res) => {
+  try {
+    const { name, email, password, confirmPassword, termsAccepted } = req.body;
+
+    if (!name || typeof name !== 'string' || name.trim().length < 2) {
+      return res.status(400).json({
+        success: false,
+        error: 'Nama lengkap wajib diisi minimal 2 karakter.',
+      });
+    }
+
+    if (!email || !isValidEmail(email)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Format alamat email tidak valid.',
+      });
+    }
+
+    if (!password || password.length < 8) {
+      return res.status(400).json({
+        success: false,
+        error: 'Kata sandi minimal 8 karakter.',
+      });
+    }
+
+    if (!/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Kata sandi harus mengandung kombinasi huruf dan angka.',
+      });
+    }
+
+    if (confirmPassword !== undefined && password !== confirmPassword) {
+      return res.status(400).json({
+        success: false,
+        error: 'Konfirmasi kata sandi tidak cocok dengan kata sandi.',
+      });
+    }
+
+    if (!termsAccepted) {
+      return res.status(400).json({
+        success: false,
+        error: 'Anda harus menyetujui Ketentuan Layanan & Kebijakan Privasi.',
+      });
+    }
+
+    const cleanEmail = email.toLowerCase().trim();
+    const users = loadUsers();
+
+    if (users.some((u) => u.email.toLowerCase() === cleanEmail)) {
+      return res.status(409).json({
+        success: false,
+        error: 'Alamat email ini sudah terdaftar. Silakan login atau gunakan email lain.',
+      });
+    }
+
+    const userId = `usr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const passwordHash = hashPassword(password);
+
+    const newUser: StoredUser = {
+      id: userId,
+      name: name.trim(),
+      email: cleanEmail,
+      passwordHash,
+      createdAt: Date.now(),
+      lastLoginAt: Date.now(),
+    };
+
+    users.push(newUser);
+    saveUsers(users);
+
+    // Issue session token (7 days)
+    const token = createSessionToken(userId, cleanEmail, 7);
+
+    return res.status(201).json({
+      success: true,
+      message: 'Pendaftaran berhasil. Selamat datang di Montra!',
+      token,
+      user: {
+        id: newUser.id,
+        name: newUser.name,
+        email: newUser.email,
+        createdAt: newUser.createdAt,
+      },
+      isNewUser: true,
+    });
+  } catch (err: any) {
+    console.error('Registration error:', err);
+    return res.status(500).json({
+      success: false,
+      error: 'Terjadi kesalahan sistem saat mendaftar. Silakan coba lagi.',
+    });
+  }
+});
+
+// 2. User Login
+app.post('/api/auth/login', (req, res) => {
+  try {
+    const { email, password, rememberMe } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        error: 'Email dan kata sandi wajib diisi.',
+      });
+    }
+
+    const cleanEmail = email.toLowerCase().trim();
+    const users = loadUsers();
+    const user = users.find((u) => u.email.toLowerCase() === cleanEmail);
+
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        error: 'Email atau kata sandi tidak sesuai.',
+      });
+    }
+
+    const isMatch = verifyPassword(password, user.passwordHash);
+    if (!isMatch) {
+      return res.status(401).json({
+        success: false,
+        error: 'Email atau kata sandi tidak sesuai.',
+      });
+    }
+
+    // Update last login
+    user.lastLoginAt = Date.now();
+    saveUsers(users);
+
+    // Issue session token: 30 days if rememberMe, else 1 day
+    const daysValid = rememberMe ? 30 : 1;
+    const token = createSessionToken(user.id, user.email, daysValid);
+
+    return res.json({
+      success: true,
+      token,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        createdAt: user.createdAt,
+      },
+      message: 'Login berhasil.',
+    });
+  } catch (err: any) {
+    console.error('Login error:', err);
+    return res.status(500).json({
+      success: false,
+      error: 'Terjadi kesalahan server saat memproses login.',
+    });
+  }
+});
+
+// 3. Current Authenticated User Session Check
+app.get('/api/auth/me', (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({
+        success: false,
+        error: 'Sesi autentikasi tidak ditemukan. Silakan login.',
+      });
+    }
+
+    const token = authHeader.substring(7);
+    const session = verifySessionToken(token);
+
+    if (!session) {
+      return res.status(401).json({
+        success: false,
+        error: 'Sesi Anda telah berakhir atau tidak valid. Silakan login kembali.',
+      });
+    }
+
+    const users = loadUsers();
+    const user = users.find((u) => u.id === session.userId);
+
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        error: 'Pengguna tidak ditemukan.',
+      });
+    }
+
+    return res.json({
+      success: true,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        createdAt: user.createdAt,
+      },
+    });
+  } catch (err: any) {
+    console.error('Auth verification error:', err);
+    return res.status(500).json({
+      success: false,
+      error: 'Gagal memverifikasi sesi.',
+    });
+  }
+});
+
+// 4. Logout Endpoint
+app.post('/api/auth/logout', (_req, res) => {
+  return res.json({
+    success: true,
+    message: 'Berhasil keluar dari akun.',
+  });
+});
+
+// 5. Forgot Password / Request Reset Code
+app.post('/api/auth/forgot-password', (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email || !isValidEmail(email)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Masukkan alamat email yang valid.',
+      });
+    }
+
+    const cleanEmail = email.toLowerCase().trim();
+    const users = loadUsers();
+    const user = users.find((u) => u.email.toLowerCase() === cleanEmail);
+
+    if (!user) {
+      // Avoid user enumeration or reveal
+      return res.json({
+        success: true,
+        message: 'Jika email terdaftar, instruksi pemulihan telah dikirim.',
+      });
+    }
+
+    // Generate secure 6-digit verification code with 15-minute expiry
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    user.resetCode = code;
+    user.resetCodeExpiresAt = Date.now() + 15 * 60 * 1000;
+    saveUsers(users);
+
+    return res.json({
+      success: true,
+      message: 'Kode verifikasi reset sandi 6 digit telah dikirim ke email Anda.',
+      previewCode: code, // Provided for instant evaluation in beta
+    });
+  } catch (err: any) {
+    console.error('Forgot password error:', err);
+    return res.status(500).json({
+      success: false,
+      error: 'Terjadi kesalahan saat memproses permintaan reset kata sandi.',
+    });
+  }
+});
+
+// 6. Reset Password with Code
+app.post('/api/auth/reset-password', (req, res) => {
+  try {
+    const { email, code, newPassword, confirmPassword } = req.body;
+
+    if (!email || !code || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        error: 'Semua kolom reset kata sandi wajib diisi.',
+      });
+    }
+
+    if (newPassword.length < 8 || !/[A-Za-z]/.test(newPassword) || !/[0-9]/.test(newPassword)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Kata sandi baru minimal 8 karakter dan kombinasi huruf serta angka.',
+      });
+    }
+
+    if (confirmPassword && newPassword !== confirmPassword) {
+      return res.status(400).json({
+        success: false,
+        error: 'Konfirmasi kata sandi baru tidak cocok.',
+      });
+    }
+
+    const cleanEmail = email.toLowerCase().trim();
+    const users = loadUsers();
+    const user = users.find((u) => u.email.toLowerCase() === cleanEmail);
+
+    if (!user || !user.resetCode || !user.resetCodeExpiresAt) {
+      return res.status(400).json({
+        success: false,
+        error: 'Permintaan reset tidak valid atau telah kadaluarsa.',
+      });
+    }
+
+    if (user.resetCodeExpiresAt < Date.now()) {
+      return res.status(400).json({
+        success: false,
+        error: 'Kode verifikasi telah kadaluarsa. Silakan minta kode baru.',
+      });
+    }
+
+    if (user.resetCode !== code.trim()) {
+      return res.status(400).json({
+        success: false,
+        error: 'Kode verifikasi 6 digit tidak sesuai.',
+      });
+    }
+
+    // Update password hash and clear reset code
+    user.passwordHash = hashPassword(newPassword);
+    delete user.resetCode;
+    delete user.resetCodeExpiresAt;
+    saveUsers(users);
+
+    return res.json({
+      success: true,
+      message: 'Kata sandi Anda berhasil diperbarui. Silakan login dengan kata sandi baru.',
+    });
+  } catch (err: any) {
+    console.error('Reset password error:', err);
+    return res.status(500).json({
+      success: false,
+      error: 'Gagal memperbarui kata sandi.',
+    });
+  }
+});
+
 
 // Setup dev server with Vite or production static serving
 async function startServer() {

@@ -161,8 +161,28 @@ export const ManageSpacesView: React.FC<ManageSpacesViewProps> = ({
       </div>
 
       {/* Spaces Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        {spaces.map((space) => {
+      {spaces.length === 0 ? (
+        <div className="p-12 text-center bg-white rounded-3xl border border-stone-200/80 shadow-2xs">
+          <div className="w-12 h-12 rounded-2xl bg-lime-50 text-[#173D32] flex items-center justify-center mx-auto mb-3">
+            <Plus className="w-6 h-6" />
+          </div>
+          <h4 className="text-base font-bold text-stone-800">Belum ada ruang keuangan</h4>
+          <p className="text-xs text-stone-500 mt-1 max-w-sm mx-auto">
+            Buat ruang keuangan pertamamu untuk mulai menggunakan Montra.
+          </p>
+          <div className="flex items-center justify-center gap-2 mt-4">
+            <button
+              onClick={onOpenCreateSpace}
+              className="px-5 py-2.5 rounded-xl bg-[#173D32] text-white text-xs font-semibold hover:bg-[#123027] transition shadow-xs flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4 text-[#D9F99D]" />
+              <span>Buat Ruang Pertama</span>
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          {spaces.map((space) => {
           const isActive = space.id === activeSpaceId;
           const isShared = space.type === 'shared';
           const isOwner = space.ownerId === currentUser.id;
@@ -303,7 +323,8 @@ export const ManageSpacesView: React.FC<ManageSpacesViewProps> = ({
             </div>
           );
         })}
-      </div>
+        </div>
+      )}
 
       {/* Edit Space Modal */}
       {editingSpace && (

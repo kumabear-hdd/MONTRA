@@ -7,6 +7,9 @@ import { NetworkStatusBadge } from '../common/OfflineIndicator';
 import { PWAInstallButton } from '../common/PWAInstallButton';
 import { SpaceSelector } from '../spaces/SpaceSelector';
 
+import type { AuthUser } from '../../types/auth';
+import { LogOut } from 'lucide-react';
+
 interface HeaderProps {
   activeTab: ViewTab;
   spaces: FinancialSpace[];
@@ -22,6 +25,8 @@ interface HeaderProps {
   canCreateTransaction: boolean;
   onOpenAddModal: () => void;
   onOpenScanner?: () => void;
+  user?: AuthUser | null;
+  onLogout?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -39,6 +44,8 @@ export const Header: React.FC<HeaderProps> = ({
   canCreateTransaction,
   onOpenAddModal,
   onOpenScanner,
+  user,
+  onLogout,
 }) => {
   const titles: Record<ViewTab, { title: string; subtitle: string }> = {
     overview: {
@@ -174,6 +181,20 @@ export const Header: React.FC<HeaderProps> = ({
             <span className="hidden sm:inline">Catat Transaksi</span>
             <span className="sm:hidden">Catat</span>
           </button>
+
+          {/* User Profile & Logout (Mobile / Desktop) */}
+          {user && onLogout && (
+            <button
+              onClick={onLogout}
+              className="flex items-center gap-1.5 p-2 rounded-xl border border-stone-200 bg-white text-stone-600 hover:text-rose-600 hover:bg-rose-50 transition"
+              title={`Keluar dari akun (${user.email})`}
+            >
+              <div className="w-5 h-5 rounded-full bg-[#173D32] text-[#D9F99D] text-[10px] font-bold flex items-center justify-center">
+                {user.name.charAt(0).toUpperCase()}
+              </div>
+              <LogOut className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       </div>
     </header>

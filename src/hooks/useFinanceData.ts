@@ -25,13 +25,21 @@ import type {
 } from '../types/finance';
 import { getCurrentMonthJakarta, getDateRangeForPreset, getTodayJakarta } from '../utils/date';
 
-export function useFinanceData() {
+export function useFinanceData(authenticatedUser?: CurrentUser | null) {
   const [loading, setLoading] = useState<boolean>(true);
 
   // Multi-Space State
-  const [spaces, setSpaces] = useState<FinancialSpace[]>(INITIAL_SPACES);
+  const [spaces, setSpaces] = useState<FinancialSpace[]>([]);
   const [activeSpaceId, setActiveSpaceId] = useState<string>('space_personal');
-  const [currentUser, setCurrentUser] = useState<CurrentUser>(DEFAULT_CURRENT_USER);
+  const [currentUser, setCurrentUser] = useState<CurrentUser>(
+    authenticatedUser || DEFAULT_CURRENT_USER
+  );
+
+  useEffect(() => {
+    if (authenticatedUser) {
+      setCurrentUser(authenticatedUser);
+    }
+  }, [authenticatedUser]);
 
   // Scoped Data collections
   const [allTransactions, setAllTransactions] = useState<Transaction[]>([]);
@@ -51,12 +59,45 @@ export function useFinanceData() {
   // Reload all records from IndexedDB
   const refreshData = useCallback(async () => {
     try {
+      const activeUser = authenticatedUser || currentUser;
+      if (!activeUser?.id) {
+        setSpaces([]);
+        setAllTransactions([]);
+        setAllBudgets([]);
+        setAllGoals([]);
+        setAllLogs([]);
+        setAllTransfers([]);
+        setLoading(false);
+        return;
+      }
+
       const storedSpaces = await db.spaces.toArray();
-      const storedTx = await db.transactions.orderBy('date').reverse().toArray();
-      const storedBudgets = await db.budgets.toArray();
-      const storedGoals = await db.savingsGoals.toArray();
-      const storedLogs = await db.savingsLogs.toArray();
-      const storedTransfers = await db.transfers.orderBy('date').reverse().toArray();
+      // Strict isolation: only spaces where user is owner or member
+      const userAccessibleSpaces = storedSpaces.filter(
+        (s) => s.ownerId === activeUser.id || s.members?.some((m) => m.userId === activeUser.id)
+      );
+
+      const userSpaceIdSet = new Set(userAccessibleSpaces.map((s) => s.id));
+
+      const storedTx = await db.transactions
+        .orderBy('date')
+        .reverse()
+        .filter((tx) => userSpaceIdSet.has(tx.spaceId))
+        .toArray();
+      const storedBudgets = await db.budgets
+        .filter((b) => userSpaceIdSet.has(b.spaceId))
+        .toArray();
+      const storedGoals = await db.savingsGoals
+        .filter((g) => userSpaceIdSet.has(g.spaceId))
+        .toArray();
+      const storedLogs = await db.savingsLogs
+        .filter((l) => userSpaceIdSet.has(l.spaceId))
+        .toArray();
+      const storedTransfers = await db.transfers
+        .orderBy('date')
+        .reverse()
+        .filter((t) => userSpaceIdSet.has(t.sourceSpaceId) || userSpaceIdSet.has(t.destSpaceId))
+        .toArray();
       const settingsRecords = await db.settings.toArray();
 
       const mergedSettings: AppSettings = { ...DEFAULT_SETTINGS };
@@ -64,7 +105,7 @@ export function useFinanceData() {
         (mergedSettings as any)[rec.key] = rec.value;
       }
 
-      setSpaces(storedSpaces.length > 0 ? storedSpaces : INITIAL_SPACES);
+      setSpaces(userAccessibleSpaces);
       setAllTransactions(storedTx);
       setAllBudgets(storedBudgets);
       setAllGoals(storedGoals);
@@ -73,32 +114,41 @@ export function useFinanceData() {
       setSettings(mergedSettings);
 
       // Restore activeSpaceId from settings if present
-      if (mergedSettings.activeSpaceId && storedSpaces.some((s) => s.id === mergedSettings.activeSpaceId)) {
-        setActiveSpaceId(mergedSettings.activeSpaceId);
+      const userActiveSpaceKey = `activeSpaceId_${activeUser.id}`;
+      const savedUserSpaceId =
+        (mergedSettings as any)[userActiveSpaceKey] || mergedSettings.activeSpaceId;
+      if (savedUserSpaceId && userAccessibleSpaces.some((s) => s.id === savedUserSpaceId)) {
+        setActiveSpaceId(savedUserSpaceId);
+      } else if (userAccessibleSpaces.length > 0) {
+        setActiveSpaceId(userAccessibleSpaces[0].id);
       }
     } catch (err) {
       console.error('Failed to refresh data from IndexedDB:', err);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [authenticatedUser, currentUser]);
 
   // Initialize DB on mount
   useEffect(() => {
     (async () => {
       try {
-        await initializeMultiSpaceData();
+        await initializeMultiSpaceData(authenticatedUser || currentUser);
         await refreshData();
       } catch (e) {
         console.error('Multi-space init error:', e);
         setLoading(false);
       }
     })();
-  }, [refreshData]);
+  }, [refreshData, authenticatedUser, currentUser]);
 
   // Handle switching active space
   const handleSetActiveSpaceId = async (id: string) => {
     setActiveSpaceId(id);
+    const activeUser = authenticatedUser || currentUser;
+    if (activeUser?.id) {
+      await db.settings.put({ key: `activeSpaceId_${activeUser.id}`, value: id });
+    }
     await db.settings.put({ key: 'activeSpaceId', value: id });
   };
 
@@ -106,11 +156,26 @@ export function useFinanceData() {
   // Active Space Resolution & Role-Based Permissions
   // ----------------------------------------------------
 
-  const activeSpace =
+  const safeFallbackSpace: FinancialSpace = {
+    id: '',
+    name: 'Belum Ada Ruang',
+    description: 'Mulai dengan membuat ruang keuangan pertama Anda.',
+    icon: 'Wallet',
+    color: '#173D32',
+    type: 'personal',
+    openingBalance: 0,
+    ownerId: (authenticatedUser || currentUser).id,
+    ownerName: (authenticatedUser || currentUser).name,
+    members: [],
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  };
+
+  const activeSpace: FinancialSpace =
     spaces.find((s) => s.id === activeSpaceId && !s.isArchived) ||
     spaces.find((s) => !s.isArchived) ||
     spaces[0] ||
-    INITIAL_SPACES[0];
+    safeFallbackSpace;
 
   // Resolve current user's role in the active space
   const memberRecord = activeSpace.members?.find((m) => m.userId === currentUser.id);
@@ -763,13 +828,28 @@ export function useFinanceData() {
   // ----------------------------------------------------
 
   const clearAllData = async (): Promise<void> => {
-    await db.transactions.clear();
-    await db.budgets.clear();
-    await db.savingsGoals.clear();
-    await db.savingsLogs.clear();
-    await db.transfers.clear();
-    const allSpaces = await db.spaces.toArray();
-    for (const s of allSpaces) {
+    const activeUser = authenticatedUser || currentUser;
+    const userSpaces = spaces.filter((s) => s.ownerId === activeUser.id);
+    const spaceIds = new Set(userSpaces.map((s) => s.id));
+
+    const txToDelete = await db.transactions.filter((t) => spaceIds.has(t.spaceId)).primaryKeys();
+    await db.transactions.bulkDelete(txToDelete);
+
+    const budgetsToDelete = await db.budgets.filter((b) => spaceIds.has(b.spaceId)).primaryKeys();
+    await db.budgets.bulkDelete(budgetsToDelete);
+
+    const goalsToDelete = await db.savingsGoals.filter((g) => spaceIds.has(g.spaceId)).primaryKeys();
+    await db.savingsGoals.bulkDelete(goalsToDelete);
+
+    const logsToDelete = await db.savingsLogs.filter((l) => spaceIds.has(l.spaceId)).primaryKeys();
+    await db.savingsLogs.bulkDelete(logsToDelete);
+
+    const transfersToDelete = await db.transfers
+      .filter((t) => spaceIds.has(t.sourceSpaceId) || spaceIds.has(t.destSpaceId))
+      .primaryKeys();
+    await db.transfers.bulkDelete(transfersToDelete);
+
+    for (const s of userSpaces) {
       await db.spaces.update(s.id, { openingBalance: 0, updatedAt: Date.now() });
     }
     await refreshData();

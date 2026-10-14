@@ -165,8 +165,20 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ transactions, currency
         </div>
       </div>
 
-      {/* 3 Core Metric Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+      {transactions.length === 0 ? (
+        <div className="p-12 text-center bg-white rounded-3xl border border-stone-200/80 shadow-2xs">
+          <div className="w-12 h-12 rounded-2xl bg-lime-50 text-[#173D32] flex items-center justify-center mx-auto mb-3">
+            <BarChart3 className="w-6 h-6" />
+          </div>
+          <h4 className="text-base font-bold text-stone-800">Belum ada laporan</h4>
+          <p className="text-xs text-stone-500 mt-1 max-w-sm mx-auto">
+            Laporan akan muncul setelah kamu mulai mencatat transaksi.
+          </p>
+        </div>
+      ) : (
+        <>
+          {/* 3 Core Metric Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
         {/* Income Card */}
         <div className="p-5 sm:p-6 rounded-3xl bg-white border border-stone-200/80 shadow-2xs">
           <div className="flex items-center justify-between text-xs text-stone-500 mb-2">
@@ -374,6 +386,8 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ transactions, currency
           </div>
         </div>
       </div>
+      </>
+      )}
     </div>
   );
 };

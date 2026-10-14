@@ -4,6 +4,9 @@
  */
 
 import React, { useState } from 'react';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { AuthView } from './views/auth/AuthView';
+import { OnboardingModal } from './components/auth/OnboardingModal';
 import { DeleteConfirmModal } from './components/transactions/DeleteConfirmModal';
 import { TransactionModal } from './components/transactions/TransactionModal';
 import { ParsedReceiptData, ReceiptScannerModal } from './components/scanner/ReceiptScannerModal';
@@ -24,7 +27,8 @@ import { SavingsGoalsView } from './views/SavingsGoalsView';
 import { SettingsView } from './views/SettingsView';
 import { TransactionsView } from './views/TransactionsView';
 
-export default function App() {
+function FinanceApp() {
+  const { user, isAuthenticated, isLoading: authLoading, logout, isNewUser, setIsNewUser } = useAuth();
   const [activeTab, setActiveTab] = useState<ViewTab>('dashboard');
 
   // Modals state
@@ -35,9 +39,9 @@ export default function App() {
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [deletingTransaction, setDeletingTransaction] = useState<Transaction | null>(null);
 
-  // Central multi-space finance data & calculations
+  // Central multi-space finance data & calculations strictly scoped to authenticated user
   const {
-    loading,
+    loading: financeLoading,
     spaces,
     activeSpaceId,
     activeSpace,
@@ -90,7 +94,7 @@ export default function App() {
     contributeToSavingsGoal,
     clearAllData,
     resetToSampleData,
-  } = useFinanceData();
+  } = useFinanceData(user);
 
   // Handlers for transactions
   const handleOpenAddModal = () => {
@@ -144,17 +148,26 @@ export default function App() {
     }
   };
 
-  if (loading) {
+  // Loading state
+  if (authLoading || (isAuthenticated && financeLoading)) {
     return (
       <div className="min-h-screen bg-[#F6F7F4] flex flex-col items-center justify-center p-6 text-stone-600">
-        <div className="w-12 h-12 rounded-2xl bg-[#173D32] flex items-center justify-center animate-pulse shadow-md mb-4">
-          <span className="font-extrabold text-white text-xl">M</span>
+        <div className="w-14 h-14 rounded-2xl bg-[#173D32] flex items-center justify-center animate-pulse shadow-md mb-4">
+          <span className="font-extrabold text-[#D9F99D] text-2xl">M</span>
         </div>
-        <p className="text-sm font-semibold text-[#173D32]">Memuat Montra...</p>
-        <p className="text-xs text-stone-400 mt-1">Menyiapkan basis data multiruang finansial Anda</p>
+        <p className="text-sm font-bold text-[#173D32]">Memuat Montra...</p>
+        <p className="text-xs text-stone-400 mt-1">Mengamankan sesi dan data keuangan mandiri Anda</p>
       </div>
     );
   }
+
+  // Protected route check: if unauthenticated, render AuthView
+  if (!isAuthenticated) {
+    return <AuthView />;
+  }
+
+  // First-time onboarding trigger: if user has no financial spaces yet
+  const showOnboarding = spaces.length === 0;
 
   return (
     <div className="min-h-screen bg-[#F6F7F4] text-stone-900 flex font-sans selection:bg-[#D9F99D] selection:text-[#173D32]">
@@ -172,6 +185,8 @@ export default function App() {
         canCreateTransaction={permissions.canCreate}
         onOpenAddModal={handleOpenAddModal}
         onOpenScanner={handleOpenScanner}
+        user={user}
+        onLogout={logout}
       />
 
       {/* Main Content Area */}
@@ -192,6 +207,8 @@ export default function App() {
           canCreateTransaction={permissions.canCreate}
           onOpenAddModal={handleOpenAddModal}
           onOpenScanner={handleOpenScanner}
+          user={user}
+          onLogout={logout}
         />
 
         {/* View Routing */}
@@ -229,11 +246,11 @@ export default function App() {
               savingsOverallProgress={savingsOverallProgress}
               currency={settings.currency}
               dateFilter={dateFilter}
-              setActiveTab={setActiveTab}
               onOpenAddModal={handleOpenAddModal}
               onOpenScanner={handleOpenScanner}
               onEditTransaction={handleEditTransaction}
               onDeleteTransaction={handleDeleteTransaction}
+              setActiveTab={setActiveTab}
             />
           )}
 
@@ -318,6 +335,16 @@ export default function App() {
       {/* Floating Offline / Reconnection Banner */}
       <OfflineIndicator />
 
+      {/* First-Time Onboarding Modal for New Accounts or 0 Spaces */}
+      <OnboardingModal
+        isOpen={showOnboarding}
+        userName={user?.name || 'Pengguna'}
+        onComplete={async (spaceData) => {
+          await createSpace(spaceData);
+          setIsNewUser(false);
+        }}
+      />
+
       {/* Add / Edit Transaction Modal */}
       <TransactionModal
         isOpen={isAddModalOpen}
@@ -364,5 +391,13 @@ export default function App() {
         currency={settings.currency}
       />
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <FinanceApp />
+    </AuthProvider>
   );
 }

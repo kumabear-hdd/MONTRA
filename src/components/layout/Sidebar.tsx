@@ -14,12 +14,14 @@ import {
   TrendingUp,
   Wallet,
 } from 'lucide-react';
+import type { AuthUser } from '../../types/auth';
 import type { CurrencyCode, FinancialSpace, ViewTab } from '../../types/finance';
 import { formatCurrency } from '../../utils/currency';
 import { MontraLogo } from '../common/MontraLogo';
 import { NetworkStatusBadge } from '../common/OfflineIndicator';
 import { PWAInstallButton } from '../common/PWAInstallButton';
 import { SpaceSelector } from '../spaces/SpaceSelector';
+import { LogOut } from 'lucide-react';
 
 interface SidebarProps {
   activeTab: ViewTab;
@@ -34,6 +36,8 @@ interface SidebarProps {
   canCreateTransaction: boolean;
   onOpenAddModal: () => void;
   onOpenScanner?: () => void;
+  user?: AuthUser | null;
+  onLogout?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -49,6 +53,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   canCreateTransaction,
   onOpenAddModal,
   onOpenScanner,
+  user,
+  onLogout,
 }) => {
   const navItems: { id: ViewTab; label: string; icon: React.FC<{ className?: string }> }[] = [
     { id: 'overview', label: 'Ringkasan Multiruang', icon: Layers },
@@ -166,6 +172,30 @@ export const Sidebar: React.FC<SidebarProps> = ({
           );
         })}
       </nav>
+
+      {/* User Profile & Logout */}
+      {user && (
+        <div className="p-3 bg-stone-50 rounded-2xl border border-stone-200/80 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5 truncate">
+            <div className="w-8 h-8 rounded-full bg-[#173D32] text-[#D9F99D] font-bold text-xs flex items-center justify-center shrink-0">
+              {user.name.charAt(0).toUpperCase()}
+            </div>
+            <div className="truncate">
+              <h5 className="text-xs font-bold text-stone-900 truncate">{user.name}</h5>
+              <p className="text-[10px] text-stone-500 truncate">{user.email}</p>
+            </div>
+          </div>
+          {onLogout && (
+            <button
+              onClick={onLogout}
+              className="p-1.5 text-stone-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+              title="Keluar dari akun"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Bottom Footer Info & PWA Button */}
       <div className="pt-3 border-t border-stone-200/80 space-y-2.5">

@@ -136,6 +136,28 @@ export const BudgetsView: React.FC<BudgetsViewProps> = ({
         </div>
       </div>
 
+      {totalBudgetLimit === 0 && activeCategoryBudgets.length === 0 && (
+        <div className="p-6 rounded-3xl bg-lime-50/70 border border-lime-200/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-white text-[#173D32] flex items-center justify-center shadow-2xs shrink-0">
+              <Plus className="w-5 h-5" />
+            </div>
+            <div>
+              <h4 className="text-sm font-bold text-[#173D32]">Belum ada anggaran</h4>
+              <p className="text-xs text-stone-600 mt-0.5">
+                Belum ada anggaran. Buat budget pertamamu untuk mulai mengatur pengeluaran.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => handleOpenSetBudget('Total', 0)}
+            className="px-4 py-2 rounded-xl bg-[#173D32] text-white text-xs font-semibold hover:bg-[#123027] transition shadow-xs whitespace-nowrap"
+          >
+            Buat Budget Pertama
+          </button>
+        </div>
+      )}
+
       {/* Main Budget Hero Card: Total Monthly Spending Limit */}
       <div className="p-6 sm:p-7 rounded-3xl bg-white border border-stone-200/80 shadow-2xs">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-6 border-b border-stone-100">
