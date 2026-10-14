@@ -1,15 +1,42 @@
 import Dexie, { type Table } from 'dexie';
-import type { AppSettings, Budget, SavingsGoal, SavingsLog, Transaction } from '../types/finance';
+import type {
+  AppSettings,
+  Budget,
+  CurrentUser,
+  FinancialSpace,
+  SavingsGoal,
+  SavingsLog,
+  SpaceTransfer,
+  Transaction,
+} from '../types/finance';
+
+export const DEFAULT_CURRENT_USER: CurrentUser = {
+  id: 'usr_daffa',
+  name: 'Daffa',
+  email: 'daffa@smkarier.co.id',
+};
+
+// Household example collaborative members
+export const DEMO_MEMBERS: { id: string; name: string; email: string }[] = [
+  { id: 'usr_daffa', name: 'Daffa', email: 'daffa@smkarier.co.id' },
+  { id: 'usr_siti', name: 'Siti Rahma', email: 'siti@keluarga.id' },
+  { id: 'usr_budi', name: 'Budi Santoso', email: 'budi@keluarga.id' },
+  { id: 'usr_dewi', name: 'Dewi Lestari', email: 'dewi@keluarga.id' },
+];
 
 export class MontraDatabase extends Dexie {
+  spaces!: Table<FinancialSpace, string>;
   transactions!: Table<Transaction, string>;
   budgets!: Table<Budget, string>;
   savingsGoals!: Table<SavingsGoal, string>;
   savingsLogs!: Table<SavingsLog, string>;
+  transfers!: Table<SpaceTransfer, string>;
   settings!: Table<{ key: string; value: any }, string>;
 
   constructor() {
     super('MontraFinanceDB');
+
+    // Version 1 (Single space legacy)
     this.version(1).stores({
       transactions: 'id, type, category, date, createdAt',
       budgets: 'id, month, category',
@@ -17,198 +44,158 @@ export class MontraDatabase extends Dexie {
       savingsLogs: 'id, goalId, date, createdAt',
       settings: 'key',
     });
+
+    // Version 2 (Multi-Space Architecture with strict space boundaries)
+    this.version(2)
+      .stores({
+        spaces: 'id, type, name, ownerId, isArchived, createdAt',
+        transactions: 'id, spaceId, type, category, date, transferId, createdAt',
+        budgets: 'id, spaceId, month, category',
+        savingsGoals: 'id, spaceId, name, targetDate, createdAt',
+        savingsLogs: 'id, spaceId, goalId, date, createdAt',
+        transfers: 'id, sourceSpaceId, destSpaceId, date, createdAt',
+        settings: 'key',
+      })
+      .upgrade((tx) => {
+        // Automatically tag previous un-scoped records with default space
+        return tx
+          .table('transactions')
+          .toCollection()
+          .modify((t) => {
+            if (!t.spaceId) t.spaceId = 'space_personal';
+          });
+      });
   }
 }
 
 export const db = new MontraDatabase();
 
-// Default Application Settings for Beta Launch (Zero initial balance)
+// Default Application Settings
 export const DEFAULT_SETTINGS: AppSettings = {
-  openingBalance: 0, // Rp0 (Clean slate for beta launch)
   currency: 'IDR',
   defaultPeriod: 'this_month',
   timezone: 'Asia/Jakarta',
+  activeSpaceId: 'space_personal',
   hasInitializedSeed: true,
 };
 
+export const INITIAL_SPACES: FinancialSpace[] = [
+  {
+    id: 'space_personal',
+    name: 'Keuangan Pribadi (Personal)',
+    description: 'Ruang privat untuk mencatat pemasukan, belanja harian, dan tabungan pribadi Anda.',
+    icon: 'Wallet',
+    color: '#173D32', // Montra Forest Green
+    type: 'personal',
+    openingBalance: 0, // Clean 0 starting balance
+    ownerId: DEFAULT_CURRENT_USER.id,
+    ownerName: DEFAULT_CURRENT_USER.name,
+    members: [
+      {
+        id: `m_${Date.now()}_1`,
+        spaceId: 'space_personal',
+        userId: DEFAULT_CURRENT_USER.id,
+        name: DEFAULT_CURRENT_USER.name,
+        email: DEFAULT_CURRENT_USER.email,
+        role: 'owner',
+        joinedAt: Date.now(),
+      },
+    ],
+    isArchived: false,
+    createdAt: Date.now() - 30 * 86400000,
+    updatedAt: Date.now(),
+  },
+  {
+    id: 'space_household',
+    name: 'Rumah Tangga Bersama (Shared Household)',
+    description: 'Ruang kolaborasi 4 anggota keluarga: iuran bulanan, tagihan PLN & air, belanja dapur, dan wifi.',
+    icon: 'Home',
+    color: '#0284C7', // Blue
+    type: 'shared',
+    openingBalance: 0,
+    ownerId: DEFAULT_CURRENT_USER.id,
+    ownerName: DEFAULT_CURRENT_USER.name,
+    members: [
+      {
+        id: 'm_hh_1',
+        spaceId: 'space_household',
+        userId: 'usr_daffa',
+        name: 'Daffa (Anda)',
+        email: 'daffa@smkarier.co.id',
+        role: 'owner',
+        joinedAt: Date.now() - 25 * 86400000,
+      },
+      {
+        id: 'm_hh_2',
+        spaceId: 'space_household',
+        userId: 'usr_siti',
+        name: 'Siti Rahma',
+        email: 'siti@keluarga.id',
+        role: 'admin',
+        joinedAt: Date.now() - 25 * 86400000,
+      },
+      {
+        id: 'm_hh_3',
+        spaceId: 'space_household',
+        userId: 'usr_budi',
+        name: 'Budi Santoso',
+        email: 'budi@keluarga.id',
+        role: 'member',
+        joinedAt: Date.now() - 20 * 86400000,
+      },
+      {
+        id: 'm_hh_4',
+        spaceId: 'space_household',
+        userId: 'usr_dewi',
+        name: 'Dewi Lestari',
+        email: 'dewi@keluarga.id',
+        role: 'viewer',
+        joinedAt: Date.now() - 15 * 86400000,
+      },
+    ],
+    isArchived: false,
+    createdAt: Date.now() - 25 * 86400000,
+    updatedAt: Date.now(),
+  },
+];
+
 /**
- * Initialize Database for Beta Launch Version:
- * Ensures fresh 0 balance and removes mock prototype records.
+ * Initialize Database for Multi-Space Architecture:
+ * Sets up initial spaces, active space preference, and migrates legacy records.
  */
-export async function initializeBetaLaunchData(): Promise<void> {
-  const betaFlag = await db.settings.get('beta_launch_v1_clean');
+export async function initializeMultiSpaceData(): Promise<void> {
+  const spacesCount = await db.spaces.count();
 
-  if (!betaFlag) {
-    // Check if only prototype seed data exists
-    const seedRecords = await db.transactions
-      .filter((t) => t.id.startsWith('tx_seed_'))
-      .toArray();
-
-    if (seedRecords.length > 0) {
-      // Clean prototype dummy transactions
-      for (const rec of seedRecords) {
-        await db.transactions.delete(rec.id);
-      }
-      // Also clear prototype budgets and goals
-      const seedBudgets = await db.budgets.toArray();
-      for (const b of seedBudgets) {
-        if (b.id.startsWith('b_')) await db.budgets.delete(b.id);
-      }
-      const seedGoals = await db.savingsGoals.toArray();
-      for (const g of seedGoals) {
-        if (g.id.startsWith('goal_')) await db.savingsGoals.delete(g.id);
-      }
-    }
-
-    // Set opening balance to 0 for real beta launch
-    await db.settings.put({ key: 'openingBalance', value: 0 });
-    await db.settings.put({ key: 'currency', value: 'IDR' });
-    await db.settings.put({ key: 'defaultPeriod', value: 'this_month' });
-    await db.settings.put({ key: 'timezone', value: 'Asia/Jakarta' });
-    await db.settings.put({ key: 'beta_launch_v1_clean', value: true });
+  if (spacesCount === 0) {
+    await db.spaces.bulkPut(INITIAL_SPACES);
   }
 
-  // Ensure settings exist
+  // Ensure settings exist with activeSpaceId
   const settingsCount = await db.settings.count();
   if (settingsCount === 0) {
     for (const [key, value] of Object.entries(DEFAULT_SETTINGS)) {
       await db.settings.put({ key, value });
     }
-    await db.settings.put({ key: 'beta_launch_v1_clean', value: true });
+  } else {
+    const activeSpaceSetting = await db.settings.get('activeSpaceId');
+    if (!activeSpaceSetting) {
+      await db.settings.put({ key: 'activeSpaceId', value: 'space_personal' });
+    }
   }
-}
 
-/**
- * Optional Helper: Load Sample Demo Data on-demand (Settings > Muat Data Contoh)
- */
-export async function loadSampleDemoData(): Promise<void> {
-  const today = new Date();
-  const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
-  const todayStr = today.toISOString().split('T')[0];
+  // Migrate any legacy unassigned transactions or records
+  const unassignedTx = await db.transactions.filter((t) => !t.spaceId).toArray();
+  for (const tx of unassignedTx) {
+    await db.transactions.update(tx.id, { spaceId: 'space_personal' });
+  }
 
-  const daysAgo = (days: number) => {
-    const d = new Date(today);
-    d.setDate(d.getDate() - days);
-    return d.toISOString().split('T')[0];
-  };
+  const unassignedBudgets = await db.budgets.filter((b) => !b.spaceId).toArray();
+  for (const b of unassignedBudgets) {
+    await db.budgets.update(b.id, { spaceId: 'space_personal' });
+  }
 
-  const sampleTransactions: Transaction[] = [
-    {
-      id: `tx_${Date.now()}_1`,
-      type: 'income',
-      title: 'Gaji Bulanan',
-      amount: 8500000,
-      category: 'Salary',
-      date: daysAgo(5),
-      notes: 'Gaji pokok bulan berjalan',
-      createdAt: Date.now() - 5 * 86400000,
-      updatedAt: Date.now() - 5 * 86400000,
-      synced: true,
-    },
-    {
-      id: `tx_${Date.now()}_2`,
-      type: 'income',
-      title: 'Project Freelance UI/UX',
-      amount: 2200000,
-      category: 'Freelance',
-      date: daysAgo(2),
-      notes: 'Pengerjaan prototype mobile app',
-      createdAt: Date.now() - 2 * 86400000,
-      updatedAt: Date.now() - 2 * 86400000,
-      synced: true,
-    },
-    {
-      id: `tx_${Date.now()}_3`,
-      type: 'expense',
-      title: 'Belanja Supermarket',
-      amount: 450000,
-      category: 'Food & Drinks',
-      date: daysAgo(4),
-      notes: 'Bahan makanan dan sayuran segar',
-      createdAt: Date.now() - 4 * 86400000,
-      updatedAt: Date.now() - 4 * 86400000,
-      synced: true,
-    },
-    {
-      id: `tx_${Date.now()}_4`,
-      type: 'expense',
-      title: 'Makan Siang & Kopi',
-      amount: 65000,
-      category: 'Food & Drinks',
-      date: daysAgo(1),
-      notes: 'Kopi susu dan nasi padang',
-      createdAt: Date.now() - 1 * 86400000,
-      updatedAt: Date.now() - 1 * 86400000,
-      synced: true,
-    },
-    {
-      id: `tx_${Date.now()}_5`,
-      type: 'expense',
-      title: 'Top Up Flazz KRL / MRT',
-      amount: 150000,
-      category: 'Transportation',
-      date: daysAgo(3),
-      notes: 'Saldo transportasi umum komuter',
-      createdAt: Date.now() - 3 * 86400000,
-      updatedAt: Date.now() - 3 * 86400000,
-      synced: true,
-    },
-    {
-      id: `tx_${Date.now()}_6`,
-      type: 'expense',
-      title: 'Tagihan Listrik PLN & Wi-Fi',
-      amount: 620000,
-      category: 'Bills & Utilities',
-      date: daysAgo(6),
-      notes: 'Token listrik dan internet fiber optic',
-      createdAt: Date.now() - 6 * 86400000,
-      updatedAt: Date.now() - 6 * 86400000,
-      synced: true,
-    },
-  ];
-
-  await db.transactions.bulkPut(sampleTransactions);
-
-  const sampleBudgets: Budget[] = [
-    {
-      id: `b_${currentMonth}_total`,
-      month: currentMonth,
-      category: 'Total',
-      amount: 4500000,
-      updatedAt: Date.now(),
-    },
-    {
-      id: `b_${currentMonth}_food`,
-      month: currentMonth,
-      category: 'Food & Drinks',
-      amount: 1800000,
-      updatedAt: Date.now(),
-    },
-    {
-      id: `b_${currentMonth}_transport`,
-      month: currentMonth,
-      category: 'Transportation',
-      amount: 500000,
-      updatedAt: Date.now(),
-    },
-  ];
-
-  await db.budgets.bulkPut(sampleBudgets);
-
-  const sampleGoals: SavingsGoal[] = [
-    {
-      id: `goal_${Date.now()}_1`,
-      name: 'Dana Darurat (Emergency Fund)',
-      targetAmount: 20000000,
-      currentAmount: 5000000,
-      targetDate: `${today.getFullYear() + 1}-06-30`,
-      category: 'Security',
-      notes: '6 bulan pengeluaran rutin',
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    },
-  ];
-
-  await db.savingsGoals.bulkPut(sampleGoals);
-  await db.settings.put({ key: 'openingBalance', value: 500000 });
+  const unassignedGoals = await db.savingsGoals.filter((g) => !g.spaceId).toArray();
+  for (const g of unassignedGoals) {
+    await db.savingsGoals.update(g.id, { spaceId: 'space_personal' });
+  }
 }

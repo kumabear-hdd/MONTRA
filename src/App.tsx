@@ -7,6 +7,8 @@ import React, { useState } from 'react';
 import { DeleteConfirmModal } from './components/transactions/DeleteConfirmModal';
 import { TransactionModal } from './components/transactions/TransactionModal';
 import { ParsedReceiptData, ReceiptScannerModal } from './components/scanner/ReceiptScannerModal';
+import { CreateSpaceModal } from './components/spaces/CreateSpaceModal';
+import { TransferFundsModal } from './components/spaces/TransferFundsModal';
 import { Header } from './components/layout/Header';
 import { MobileNav } from './components/layout/MobileNav';
 import { Sidebar } from './components/layout/Sidebar';
@@ -15,6 +17,8 @@ import { useFinanceData } from './hooks/useFinanceData';
 import type { Transaction, ViewTab } from './types/finance';
 import { BudgetsView } from './views/BudgetsView';
 import { DashboardView } from './views/DashboardView';
+import { ManageSpacesView } from './views/ManageSpacesView';
+import { OverviewView } from './views/OverviewView';
 import { ReportsView } from './views/ReportsView';
 import { SavingsGoalsView } from './views/SavingsGoalsView';
 import { SettingsView } from './views/SettingsView';
@@ -26,17 +30,35 @@ export default function App() {
   // Modals state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isDirectScannerOpen, setIsDirectScannerOpen] = useState(false);
+  const [isCreateSpaceModalOpen, setIsCreateSpaceModalOpen] = useState(false);
+  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [deletingTransaction, setDeletingTransaction] = useState<Transaction | null>(null);
 
-  // Central finance data & calculations
+  // Central multi-space finance data & calculations
   const {
     loading,
+    spaces,
+    activeSpaceId,
+    activeSpace,
+    currentUser,
+    currentRole,
+    permissions,
+    setActiveSpaceId,
+    createSpace,
+    updateSpace,
+    archiveSpace,
+    addSpaceMember,
+    updateMemberRole,
+    removeSpaceMember,
+    transferBetweenSpaces,
+    switchDemoUser,
     transactions,
     periodTransactions,
     budgets,
     savingsGoals,
     savingsLogs,
+    spaceTransfers,
     settings,
     dateFilter,
     setDateFilter,
@@ -51,6 +73,10 @@ export default function App() {
     totalSavingsTarget,
     totalSavingsSaved,
     savingsOverallProgress,
+    globalOverviewData,
+    totalGlobalNetWorth,
+    totalGlobalIncome,
+    totalGlobalExpense,
     addTransaction,
     editTransaction,
     deleteTransaction,
@@ -80,6 +106,7 @@ export default function App() {
     setIsDirectScannerOpen(false);
     const draftTx: Transaction = {
       id: '',
+      spaceId: activeSpaceId,
       type: 'expense',
       title: parsed.merchant,
       amount: parsed.amount,
@@ -124,7 +151,7 @@ export default function App() {
           <span className="font-extrabold text-white text-xl">M</span>
         </div>
         <p className="text-sm font-semibold text-[#173D32]">Memuat Montra...</p>
-        <p className="text-xs text-stone-400 mt-1">Menyiapkan basis data finansial Anda</p>
+        <p className="text-xs text-stone-400 mt-1">Menyiapkan basis data multiruang finansial Anda</p>
       </div>
     );
   }
@@ -135,8 +162,14 @@ export default function App() {
       <Sidebar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
+        spaces={spaces}
+        activeSpace={activeSpace}
+        onSelectSpace={setActiveSpaceId}
+        onOpenCreateSpace={() => setIsCreateSpaceModalOpen(true)}
+        onOpenTransferModal={() => setIsTransferModalOpen(true)}
         availableBalance={availableBalance}
         currency={settings.currency}
+        canCreateTransaction={permissions.canCreate}
         onOpenAddModal={handleOpenAddModal}
         onOpenScanner={handleOpenScanner}
       />
@@ -146,16 +179,39 @@ export default function App() {
         {/* Header */}
         <Header
           activeTab={activeTab}
+          spaces={spaces}
+          activeSpace={activeSpace}
+          onSelectSpace={setActiveSpaceId}
+          onOpenCreateSpace={() => setIsCreateSpaceModalOpen(true)}
+          onOpenTransferModal={() => setIsTransferModalOpen(true)}
+          setActiveTab={setActiveTab}
           availableBalance={availableBalance}
           currency={settings.currency}
           dateFilter={dateFilter}
           setDateFilter={setDateFilter}
+          canCreateTransaction={permissions.canCreate}
           onOpenAddModal={handleOpenAddModal}
           onOpenScanner={handleOpenScanner}
         />
 
         {/* View Routing */}
         <main className="flex-1 px-4 sm:px-6 lg:px-8 pt-6">
+          {activeTab === 'overview' && (
+            <OverviewView
+              globalOverviewData={globalOverviewData}
+              totalGlobalNetWorth={totalGlobalNetWorth}
+              totalGlobalIncome={totalGlobalIncome}
+              totalGlobalExpense={totalGlobalExpense}
+              allTransfers={spaceTransfers}
+              spaces={spaces}
+              onSelectSpace={setActiveSpaceId}
+              onOpenCreateSpace={() => setIsCreateSpaceModalOpen(true)}
+              onOpenTransferModal={() => setIsTransferModalOpen(true)}
+              setActiveTab={setActiveTab}
+              currency={settings.currency}
+            />
+          )}
+
           {activeTab === 'dashboard' && (
             <DashboardView
               transactions={transactions}
@@ -217,9 +273,29 @@ export default function App() {
             <ReportsView transactions={transactions} currency={settings.currency} />
           )}
 
+          {activeTab === 'spaces' && (
+            <ManageSpacesView
+              spaces={spaces}
+              activeSpaceId={activeSpaceId}
+              currentUser={currentUser}
+              currentRole={currentRole}
+              onSelectSpace={setActiveSpaceId}
+              onOpenCreateSpace={() => setIsCreateSpaceModalOpen(true)}
+              onUpdateSpace={updateSpace}
+              onArchiveSpace={archiveSpace}
+              onAddMember={addSpaceMember}
+              onUpdateRole={updateMemberRole}
+              onRemoveMember={removeSpaceMember}
+              onSwitchDemoUser={switchDemoUser}
+              setActiveTab={setActiveTab}
+              currency={settings.currency}
+            />
+          )}
+
           {activeTab === 'settings' && (
             <SettingsView
               settings={settings}
+              activeSpace={activeSpace}
               transactions={transactions}
               onSetOpeningBalance={setOpeningBalance}
               onSetCurrency={setCurrency}
@@ -235,6 +311,7 @@ export default function App() {
       <MobileNav
         activeTab={activeTab}
         setActiveTab={setActiveTab}
+        canCreateTransaction={permissions.canCreate}
         onOpenAddModal={handleOpenAddModal}
       />
 
@@ -267,6 +344,24 @@ export default function App() {
         isOpen={isDirectScannerOpen}
         onClose={() => setIsDirectScannerOpen(false)}
         onReceiptParsed={handleReceiptParsedDirect}
+      />
+
+      {/* Create Financial Space Modal */}
+      <CreateSpaceModal
+        isOpen={isCreateSpaceModalOpen}
+        onClose={() => setIsCreateSpaceModalOpen(false)}
+        onCreateSpace={createSpace}
+        currency={settings.currency}
+      />
+
+      {/* Inter-Space Fund Transfer Modal */}
+      <TransferFundsModal
+        isOpen={isTransferModalOpen}
+        onClose={() => setIsTransferModalOpen(false)}
+        spaces={spaces}
+        activeSpaceId={activeSpaceId}
+        onTransferFunds={transferBetweenSpaces}
+        currency={settings.currency}
       />
     </div>
   );

@@ -20,11 +20,12 @@ import {
 import { PWAInstallButton } from '../components/common/PWAInstallButton';
 import { db } from '../db/db';
 import { usePWAInstall } from '../hooks/usePWAInstall';
-import type { AppSettings, CurrencyCode, Transaction } from '../types/finance';
+import type { AppSettings, CurrencyCode, FinancialSpace, Transaction } from '../types/finance';
 import { CURRENCY_CONFIG, formatCurrency, parseCurrencyInput } from '../utils/currency';
 
 interface SettingsViewProps {
   settings: AppSettings;
+  activeSpace?: FinancialSpace;
   transactions: Transaction[];
   onSetOpeningBalance: (val: number) => Promise<void>;
   onSetCurrency: (curr: CurrencyCode) => Promise<void>;
@@ -35,6 +36,7 @@ interface SettingsViewProps {
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
   settings,
+  activeSpace,
   transactions,
   onSetOpeningBalance,
   onSetCurrency,
@@ -44,12 +46,19 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 }) => {
   const { isInstalled } = usePWAInstall();
 
-  // Opening balance form state
+  // Opening balance form state per active space
   const [openingBalanceInput, setOpeningBalanceInput] = useState<string>(
-    settings.openingBalance.toString()
+    (activeSpace?.openingBalance ?? 0).toString()
   );
   const [openingBalanceSuccess, setOpeningBalanceSuccess] = useState(false);
   const [isSavingBalance, setIsSavingBalance] = useState(false);
+
+  // Sync opening balance when active space changes
+  React.useEffect(() => {
+    if (activeSpace) {
+      setOpeningBalanceInput(activeSpace.openingBalance.toString());
+    }
+  }, [activeSpace?.id, activeSpace?.openingBalance]);
 
   // Currency select state
   const [selectedCurrency, setSelectedCurrency] = useState<CurrencyCode>(settings.currency);
@@ -190,9 +199,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <Wallet className="w-5 h-5" />
           </div>
           <div>
-            <h3 className="text-base font-bold text-[#173D32]">Saldo Awal Akun (Opening Balance)</h3>
+            <h3 className="text-base font-bold text-[#173D32]">
+              Saldo Awal Ruang: {activeSpace?.name || 'Ruang Aktif'}
+            </h3>
             <p className="text-xs text-stone-500">
-              Saldo awal kas atau rekening saat Anda pertama kali mulai mencatat di Montra.
+              Saldo awal kas atau rekening mandiri untuk ruang ini saat Anda pertama kali mulai mencatat.
             </p>
           </div>
         </div>
@@ -200,7 +211,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         <form onSubmit={handleSaveOpeningBalance} className="space-y-3 pt-2">
           <div className="max-w-md">
             <label className="block text-xs font-bold text-stone-700 mb-1">
-              Nominal Saldo Awal ({selectedCurrency})
+              Nominal Saldo Awal {activeSpace ? `(${activeSpace.name})` : ''} ({selectedCurrency})
             </label>
             <div className="relative">
               <input
