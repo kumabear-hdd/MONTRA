@@ -5,7 +5,7 @@
 
 import React, { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { Eye, EyeOff, Loader2, Lock, LogIn, Mail, ShieldAlert } from 'lucide-react';
+import { Eye, EyeOff, Loader2, Lock, LogIn, Mail, ShieldAlert, Sparkles } from 'lucide-react';
 
 interface LoginCardProps {
   onSwitchToRegister: () => void;
@@ -16,7 +16,7 @@ export const LoginCard: React.FC<LoginCardProps> = ({
   onSwitchToRegister,
   onOpenForgotPassword,
 }) => {
-  const { login, isLoading, error, clearError } = useAuth();
+  const { login, quickStart, isLoading, error, clearError } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -123,7 +123,7 @@ export const LoginCard: React.FC<LoginCardProps> = ({
         <button
           type="submit"
           disabled={isLoading}
-          className="w-full mt-2 py-3 rounded-2xl bg-[#173D32] text-white font-bold text-xs hover:bg-[#123027] active:scale-[0.99] transition shadow-sm flex items-center justify-center gap-2 disabled:opacity-60"
+          className="w-full mt-2 py-3 rounded-2xl bg-[#173D32] text-white font-bold text-xs hover:bg-[#123027] active:scale-[0.99] transition shadow-sm flex items-center justify-center gap-2 disabled:opacity-60 cursor-pointer"
         >
           {isLoading ? (
             <>
@@ -136,6 +136,22 @@ export const LoginCard: React.FC<LoginCardProps> = ({
               <span>Masuk ke Montra</span>
             </>
           )}
+        </button>
+
+        {/* 1-Click Clean Account Quick Start */}
+        <div className="relative flex items-center justify-center my-2 pt-1">
+          <div className="border-t border-stone-200 w-full" />
+          <span className="bg-white px-3 text-[11px] text-stone-400 font-medium">atau</span>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => quickStart()}
+          disabled={isLoading}
+          className="w-full py-2.5 rounded-2xl border border-stone-300 bg-stone-50 hover:bg-stone-100 text-stone-800 font-bold text-xs active:scale-[0.99] transition shadow-2xs flex items-center justify-center gap-2 cursor-pointer"
+        >
+          <Sparkles className="w-4 h-4 text-[#173D32]" />
+          <span>Mulai Cepat (Akun Baru Bersih Rp0)</span>
         </button>
       </form>
 

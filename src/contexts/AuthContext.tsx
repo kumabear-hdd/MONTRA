@@ -16,6 +16,7 @@ interface AuthContextType {
   clearError: () => void;
   login: (credentials: LoginCredentials) => Promise<boolean>;
   register: (credentials: RegisterCredentials) => Promise<boolean>;
+  quickStart: () => Promise<boolean>;
   logout: () => Promise<void>;
   forgotPassword: (email: string) => Promise<{ success: boolean; message?: string; previewCode?: string; error?: string }>;
   resetPassword: (
@@ -175,6 +176,38 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  // 2b. Quick Start Clean Account
+  const quickStart = async (): Promise<boolean> => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/auth/quick-start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const data: AuthResponse = await res.json();
+      if (!res.ok || !data.success) {
+        setError(data.error || 'Gagal memulai akun cepat.');
+        return false;
+      }
+
+      if (data.token && data.user) {
+        saveToken(data.token, true);
+        setUser(data.user);
+        setIsNewUser(false);
+        return true;
+      }
+      return false;
+    } catch (err: any) {
+      console.error('Quick start network error:', err);
+      setError('Koneksi terputus saat membuat akun cepat.');
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // 3. Logout
   const logout = async (): Promise<void> => {
     setIsLoading(true);
@@ -253,6 +286,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         clearError,
         login,
         register,
+        quickStart,
         logout,
         forgotPassword,
         resetPassword,

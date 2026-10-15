@@ -284,6 +284,50 @@ app.post('/api/auth/register', (req, res) => {
   }
 });
 
+// 1b. User Quick-Start Clean Account (1-Click instant login for clean evaluation)
+app.post('/api/auth/quick-start', (_req, res) => {
+  try {
+    const users = loadUsers();
+    let guestUser = users[0];
+
+    if (!guestUser) {
+      guestUser = {
+        id: `usr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        name: 'Pengguna Montra',
+        email: 'pengguna@montra.id',
+        passwordHash: hashPassword('Montra2026!'),
+        createdAt: Date.now(),
+        lastLoginAt: Date.now(),
+      };
+      users.push(guestUser);
+      saveUsers(users);
+    } else {
+      guestUser.lastLoginAt = Date.now();
+      saveUsers(users);
+    }
+
+    const token = createSessionToken(guestUser.id, guestUser.email, 30);
+
+    return res.json({
+      success: true,
+      token,
+      user: {
+        id: guestUser.id,
+        name: guestUser.name,
+        email: guestUser.email,
+        createdAt: guestUser.createdAt,
+      },
+      message: 'Berhasil masuk dengan akun bersih.',
+    });
+  } catch (err: any) {
+    console.error('Quick start error:', err);
+    return res.status(500).json({
+      success: false,
+      error: 'Terjadi kesalahan sistem saat membuat akun cepat.',
+    });
+  }
+});
+
 // 2. User Login
 app.post('/api/auth/login', (req, res) => {
   try {
@@ -303,7 +347,7 @@ app.post('/api/auth/login', (req, res) => {
     if (!user) {
       return res.status(401).json({
         success: false,
-        error: 'Email atau kata sandi tidak sesuai.',
+        error: 'Akun dengan email ini belum terdaftar. Silakan daftar atau gunakan tombol "Masuk Cepat" di bawah.',
       });
     }
 

@@ -117,32 +117,20 @@ export const ReceiptScannerModal: React.FC<ReceiptScannerModalProps> = ({
     try {
       let mediaStream: MediaStream;
 
-      // 1. Try rear/environment camera with good resolution
+      // Try back camera on mobile or default camera on desktop/laptop
       try {
         mediaStream = await navigator.mediaDevices.getUserMedia({
           video: {
             facingMode: { ideal: facingMode },
-            width: { ideal: 1920, min: 640 },
-            height: { ideal: 1080, min: 480 },
           },
           audio: false,
         });
       } catch (idealErr) {
-        console.warn('Ideal camera constraints unavailable, trying fallback:', idealErr);
-        // 2. Fallback to basic constraint
-        try {
-          mediaStream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode },
-            audio: false,
-          });
-        } catch (basicErr) {
-          console.warn('Basic facingMode unavailable, trying video: true:', basicErr);
-          // 3. Fallback to any video stream
-          mediaStream = await navigator.mediaDevices.getUserMedia({
-            video: true,
-            audio: false,
-          });
-        }
+        console.warn('Ideal facingMode failed, falling back to basic video: true', idealErr);
+        mediaStream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false,
+        });
       }
 
       setStream(mediaStream);

@@ -65,8 +65,13 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       setRawAmount(editingTransaction.amount.toString());
       setCategory(editingTransaction.category);
       setDate(editingTransaction.date);
-      setNotes(editingTransaction.notes || '');
-      setOcrSuccessBanner(null);
+      if (!editingTransaction.id) {
+        setOcrSuccessBanner(
+          `Struk "${editingTransaction.title}" berhasil dipindai dengan kamera! Nominal Rp${editingTransaction.amount.toLocaleString('id-ID')} dan kategori telah diisi otomatis.`
+        );
+      } else {
+        setOcrSuccessBanner(null);
+      }
     } else {
       setType('expense');
       setTitle('');
