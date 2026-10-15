@@ -11,18 +11,13 @@ import type {
 } from '../types/finance';
 
 export const DEFAULT_CURRENT_USER: CurrentUser = {
-  id: 'usr_daffa',
-  name: 'Daffa',
-  email: 'daffa@smkarier.co.id',
+  id: '',
+  name: '',
+  email: '',
 };
 
-// Household example collaborative members
-export const DEMO_MEMBERS: { id: string; name: string; email: string }[] = [
-  { id: 'usr_daffa', name: 'Daffa', email: 'daffa@smkarier.co.id' },
-  { id: 'usr_siti', name: 'Siti Rahma', email: 'siti@keluarga.id' },
-  { id: 'usr_budi', name: 'Budi Santoso', email: 'budi@keluarga.id' },
-  { id: 'usr_dewi', name: 'Dewi Lestari', email: 'dewi@keluarga.id' },
-];
+// Household collaborative members empty by default
+export const DEMO_MEMBERS: { id: string; name: string; email: string }[] = [];
 
 export class MontraDatabase extends Dexie {
   spaces!: Table<FinancialSpace, string>;
