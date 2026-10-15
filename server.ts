@@ -11,7 +11,7 @@ import {
   type StoredUser,
   verifyPassword,
   verifySessionToken,
-} from './src/server/auth.js';
+} from './src/server/auth.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -582,4 +582,9 @@ async function startServer() {
   });
 }
 
-startServer();
+// In standard Node/AI Studio runtime, start the server. On Vercel, app is exported as serverless handler.
+if (!process.env.VERCEL) {
+  startServer();
+}
+
+export default app;

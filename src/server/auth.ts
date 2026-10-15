@@ -28,16 +28,28 @@ export interface SessionPayload {
   expiresAt: number;
 }
 
-// Persistent user storage file in .data directory
-const DATA_DIR = path.resolve(__dirname, '../../.data');
+// Persistent user storage file in .data directory (with /tmp fallback for Vercel/serverless)
+const isServerless = !!(
+  process.env.VERCEL ||
+  process.env.AWS_LAMBDA_FUNCTION_NAME ||
+  process.env.LAMBDA_TASK_ROOT
+);
+const DATA_DIR = isServerless ? '/tmp/.data' : path.resolve(__dirname, '../../.data');
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
+
+// In-memory cache fallback for environments where filesystem is ephemeral or read-only
+let memoryUsers: StoredUser[] = [];
 
 // Secret for signing session tokens (fallback to generated runtime secret)
 const AUTH_SECRET = process.env.AUTH_SECRET || 'montra-fintech-secure-jwt-key-2026';
 
 function ensureDataDir() {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+  } catch (e) {
+    // Ignore read-only dir errors
   }
 }
 
@@ -45,23 +57,30 @@ export function loadUsers(): StoredUser[] {
   try {
     ensureDataDir();
     if (!fs.existsSync(USERS_FILE)) {
-      fs.writeFileSync(USERS_FILE, JSON.stringify([], null, 2), 'utf-8');
-      return [];
+      try {
+        fs.writeFileSync(USERS_FILE, JSON.stringify(memoryUsers, null, 2), 'utf-8');
+      } catch {
+        // Read-only filesystem fallback
+      }
+      return memoryUsers;
     }
     const data = fs.readFileSync(USERS_FILE, 'utf-8');
-    return JSON.parse(data) as StoredUser[];
+    const parsed = JSON.parse(data) as StoredUser[];
+    memoryUsers = parsed;
+    return parsed;
   } catch (err) {
-    console.error('Error loading users store:', err);
-    return [];
+    console.warn('Filesystem access limited, using in-memory users store');
+    return memoryUsers;
   }
 }
 
 export function saveUsers(users: StoredUser[]): void {
+  memoryUsers = users;
   try {
     ensureDataDir();
     fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2), 'utf-8');
   } catch (err) {
-    console.error('Error saving users store:', err);
+    console.warn('Filesystem write limited, stored in memory cache');
   }
 }
 
